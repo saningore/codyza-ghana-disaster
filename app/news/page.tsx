@@ -7,6 +7,7 @@ import { TIME_ZONE } from "@/lib/types";
 export const metadata: Metadata = { title: "Bulletins" };
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+export const preferredRegion = "cpt1";
 export const maxDuration = 30;
 
 export default async function NewsPage() {
@@ -24,7 +25,7 @@ export default async function NewsPage() {
           <BulletinCards items={feed.items} />
         </>
       ) : (
-        <p className="mt-4 text-lg">{feed.message}</p>
+        <p className="mt-4 text-lg" data-upstream={feed.detail}>{feed.message}</p>
       )}
     </article>
   );
