@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseReliefWebRss } from "@/lib/bulletins";
+import { parseReliefWebJson, parseReliefWebRss } from "@/lib/bulletins";
 import { canRequestDeviceLocation } from "@/lib/locate";
 import { galleryIds, parsePoliceMedia, sectionIds } from "@/lib/missing";
 import { parseNetworkFix, publicAddress } from "@/lib/network";
@@ -40,6 +40,31 @@ const ROADS = {
 
 const POLICE_HTML = `<h2><strong>MISSING PERSONS</strong></h2>images=&#8221;11,12&#8221;<h2>WANTED PERSONS</h2>images=&#8221;99&#8221;<h2>ACCIDENT VICTIMS</h2>images=&#8221;77&#8221;`;
 
+const RSS2JSON = {
+  status: "ok",
+  items: [
+    {
+      title: "Ghana: Flood Situation & Needs",
+      link: "https://reliefweb.int/report/ghana/flood-situation",
+      pubDate: "2026-11-04 18:04:26",
+      author: "International Organization for Migration",
+      description: '<div class="tag source">Source: International Organization for Migration</div><p>Please refer to the attached file.</p><p>1,694 people were registered.</p>',
+      categories: ["Ghana", "Situation Report", "Flood"],
+    },
+    {
+      title: "A news headline about a closed road",
+      link: "https://reliefweb.int/report/ghana/headline",
+      categories: ["News and Press Release"],
+      description: "<p>The highway is closed according to a headline.</p>",
+    },
+    {
+      title: "Insecure link",
+      link: "http://reliefweb.int/report/ghana/insecure",
+      categories: ["Situation Report"],
+    },
+  ],
+};
+
 describe("ReliefWeb Ghana RSS", () => {
   const items = parseReliefWebRss(RSS);
 
@@ -53,6 +78,20 @@ describe("ReliefWeb Ghana RSS", () => {
     expect(items[0]?.excerpt).toBe("1,694 people were registered.");
     expect(items[0]).not.toHaveProperty("count");
     expect(items[1]?.situation).toBe(false);
+  });
+
+  it("reads the same reports from the RSS2JSON copy", () => {
+    const items = parseReliefWebJson(RSS2JSON);
+    expect(items.map((item) => item.title)).toEqual([
+      "Ghana: Flood Situation & Needs",
+      "A news headline about a closed road",
+    ]);
+    expect(items[0]?.situation).toBe(true);
+    expect(items[0]?.publisher).toBe("International Organization for Migration");
+    expect(items[0]?.excerpt).toBe("1,694 people were registered.");
+    expect(items[0]?.published).toBe("2026-11-04T18:04:26.000Z");
+    expect(items[1]?.situation).toBe(false);
+    expect(parseReliefWebJson({ status: "error" })).toEqual([]);
   });
 });
 

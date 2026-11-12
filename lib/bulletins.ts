@@ -1,11 +1,10 @@
-import { UpstreamError } from "@/lib/errors";
-import { fetchHttpsText, fetchText } from "@/lib/http";
+import { fetchText } from "@/lib/http";
 import { decodeEntities, httpsUrl, plainText } from "@/lib/text";
 
 export const RELIEFWEB_RSS = "https://reliefweb.int/updates/rss.xml?legacy-river=country%2Fgha";
 export const RELIEFWEB_SEARCH = "https://reliefweb.int/updates/rss.xml?search[value]=primary_country.iso3:GHA";
 export const RELIEFWEB_GHANA = "https://reliefweb.int/country/gha";
-const BROWSER_CLIENT = "Mozilla/5.0 (compatible; GhanaDisaster/1.0; +https://ghanadisaster.com)";
+const RSS2JSON = "https://api.rss2json.com/v1/api.json?rss_url=";
 
 export type Bulletin = {
   title: string;
@@ -24,6 +23,15 @@ const FAILURE = "ReliefWeb could not be read. No bulletin was added.";
 
 let cache: { at: number; items: Bulletin[] } | null = null;
 
+type Rss2Item = {
+  title?: string;
+  link?: string;
+  pubDate?: string;
+  author?: string;
+  description?: string;
+  categories?: string[];
+};
+
 export function parseReliefWebRss(xml: string): Bulletin[] {
   if (!xml.includes("<rss")) return [];
   const items: Bulletin[] = [];
@@ -35,50 +43,83 @@ export function parseReliefWebRss(xml: string): Bulletin[] {
   return items;
 }
 
+export function parseReliefWebJson(body: unknown): Bulletin[] {
+  if (!body || typeof body !== "object") return [];
+  const record = body as { status?: string; items?: Rss2Item[] };
+  if (record.status !== "ok" || !Array.isArray(record.items)) return [];
+  const items: Bulletin[] = [];
+  for (const entry of record.items) {
+    const item = fromRss2(entry);
+    if (item) items.push(item);
+    if (items.length >= 20) break;
+  }
+  return items;
+}
+
 export async function loadBulletins(): Promise<BulletinFeed> {
   const checkedAt = new Date().toISOString();
-  if (cache && Date.now() - cache.at < 60_000) return { ok: true, checkedAt, items: cache.items };
+  if (cache && Date.now() - cache.at < 10 * 60_000) return { ok: true, checkedAt, items: cache.items };
   const attempts: string[] = [];
   for (const url of [RELIEFWEB_RSS, RELIEFWEB_SEARCH]) {
-    const read = await readRss(url, attempts);
-    if (!read.length) continue;
-    cache = { at: Date.now(), items: read };
-    return { ok: true, checkedAt, items: read };
+    const direct = await readDirect(url, attempts);
+    if (direct.length) return store(checkedAt, direct);
+    const converted = await readConverted(url, attempts);
+    if (converted.length) return store(checkedAt, converted);
   }
   return { ok: false, checkedAt, message: FAILURE, detail: attempts.join(" | ").slice(0, 500) };
 }
 
-async function readRss(url: string, attempts: string[]): Promise<Bulletin[]> {
+function store(checkedAt: string, items: Bulletin[]): BulletinFeed {
+  cache = { at: Date.now(), items };
+  return { ok: true, checkedAt, items };
+}
+
+async function readDirect(url: string, attempts: string[]): Promise<Bulletin[]> {
   const name = url.includes("legacy-river") ? "legacy" : "search";
-  for (const userAgent of [undefined, BROWSER_CLIENT]) {
-    const label = userAgent ? "browser" : "site";
-    try {
-      const response = await fetchText(url, 20_000, { userAgent, store: false });
-      const kind = response.body.includes("<rss") ? "rss" : response.body.includes("<html") ? "html" : response.body ? "other" : "empty";
-      attempts.push(`${name}/${label}:${response.status}:${kind}:${response.body.length}`);
-      if (response.status !== 200 || kind !== "rss") continue;
-      const items = parseReliefWebRss(response.body);
-      if (items.length) return items;
-      attempts.push(`${name}/${label}:parsed0`);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "error";
-      attempts.push(`${name}/${label}:${message.slice(0, 80)}`);
-      if (!(error instanceof UpstreamError)) continue;
-    }
-  }
   try {
-    const response = await fetchHttpsText(url, 20_000);
+    const response = await fetchText(url, 20_000, { store: false });
     const kind = response.body.includes("<rss") ? "rss" : response.body.includes("<html") ? "html" : response.body ? "other" : "empty";
-    attempts.push(`${name}/https:${response.status}:${kind}:${response.body.length}`);
-    if (response.status === 200 && kind === "rss") {
-      const items = parseReliefWebRss(response.body);
-      if (items.length) return items;
-    }
+    attempts.push(`${name}:${response.status}:${kind}:${response.body.length}`);
+    if (response.status !== 200 || kind !== "rss") return [];
+    return parseReliefWebRss(response.body);
   } catch (error) {
     const message = error instanceof Error ? error.message : "error";
-    attempts.push(`${name}/https:${message.slice(0, 80)}`);
+    attempts.push(`${name}:${message.slice(0, 80)}`);
+    return [];
   }
-  return [];
+}
+
+async function readConverted(url: string, attempts: string[]): Promise<Bulletin[]> {
+  const name = url.includes("legacy-river") ? "legacy" : "search";
+  try {
+    const response = await fetchText(`${RSS2JSON}${encodeURIComponent(url)}`, 20_000, {
+      store: false,
+      accept: "application/json",
+    });
+    attempts.push(`${name}/rss2json:${response.status}:${response.body.length}`);
+    if (response.status !== 200) return [];
+    return parseReliefWebJson(JSON.parse(response.body) as unknown);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "error";
+    attempts.push(`${name}/rss2json:${message.slice(0, 80)}`);
+    return [];
+  }
+}
+
+function fromRss2(entry: Rss2Item): Bulletin | null {
+  const title = plainText(entry.title ?? "");
+  const url = httpsUrl(entry.link ?? "");
+  if (!title || !url || !url.startsWith("https://reliefweb.int/")) return null;
+  const description = entry.description ?? "";
+  const categories = (entry.categories ?? []).map((category) => plainText(category));
+  return {
+    title,
+    url,
+    published: iso(entry.pubDate ?? ""),
+    publisher: publisher(description) || plainText(entry.author ?? "") || null,
+    situation: categories.some((category) => category.toLowerCase() === "situation report"),
+    excerpt: excerpt(description),
+  };
 }
 
 function bulletin(item: string): Bulletin | null {
@@ -123,6 +164,7 @@ function tag(item: string, name: string): string | null {
 
 function iso(value: string): string | null {
   if (!value) return null;
-  const time = Date.parse(value);
+  const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value) ? `${value.replace(" ", "T")}Z` : value;
+  const time = Date.parse(normalized);
   return Number.isFinite(time) ? new Date(time).toISOString() : null;
 }

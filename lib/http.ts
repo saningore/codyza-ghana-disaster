@@ -5,9 +5,9 @@ import https from "node:https";
 export async function fetchText(
   url: string,
   timeoutMs = 15000,
-  options?: { userAgent?: string; store?: boolean },
+  options?: { userAgent?: string; store?: boolean; accept?: string },
 ): Promise<{ status: number; body: string }> {
-  const response = await request(url, timeoutMs, "application/xml, text/xml, application/rss+xml, text/plain", options);
+  const response = await request(url, timeoutMs, options?.accept ?? "application/xml, text/xml, application/rss+xml, text/plain", options);
   return { status: response.status, body: await response.text() };
 }
 
