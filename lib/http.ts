@@ -2,8 +2,12 @@ import { UpstreamError } from "@/lib/errors";
 import { USER_AGENT } from "@/lib/types";
 import https from "node:https";
 
-export async function fetchText(url: string, timeoutMs = 15000): Promise<{ status: number; body: string }> {
-  const response = await request(url, timeoutMs, "application/xml, text/xml, application/rss+xml, text/plain");
+export async function fetchText(
+  url: string,
+  timeoutMs = 15000,
+  options?: { userAgent?: string; store?: boolean },
+): Promise<{ status: number; body: string }> {
+  const response = await request(url, timeoutMs, "application/xml, text/xml, application/rss+xml, text/plain", options);
   return { status: response.status, body: await response.text() };
 }
 
@@ -27,23 +31,26 @@ async function request(
   url: string,
   timeoutMs: number,
   accept: string,
-  extra?: { method?: "GET" | "POST"; body?: string; contentType?: string },
+  extra?: { method?: "GET" | "POST"; body?: string; contentType?: string; userAgent?: string; store?: boolean },
 ): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const headers: Record<string, string> = {
       Accept: accept,
-      "User-Agent": USER_AGENT,
+      "Accept-Encoding": "gzip, deflate, br",
+      "User-Agent": extra?.userAgent || USER_AGENT,
     };
     if (extra?.contentType) headers["Content-Type"] = extra.contentType;
+    const method = extra?.method ?? "GET";
     const init: RequestInit & { next?: { revalidate: number } } = {
-      method: extra?.method ?? "GET",
+      method,
       body: extra?.body,
       signal: controller.signal,
       headers,
     };
-    if (process.env.NEXT_RUNTIME && (extra?.method ?? "GET") === "GET") init.next = { revalidate: 60 };
+    if (extra?.store === false) init.cache = "no-store";
+    else if (process.env.NEXT_RUNTIME && method === "GET") init.next = { revalidate: 60 };
     return await fetch(url, init);
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {

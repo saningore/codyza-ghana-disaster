@@ -30,7 +30,7 @@ const SOURCES = [
   {
     name: "ReliefWeb",
     href: "https://reliefweb.int/updates/rss.xml?legacy-river=country%2Fgha",
-    use: "The public Ghana updates RSS. The Bulletins page lists the items. The Situation page keeps the items whose category is Situation Report, with the publisher and date from the feed.",
+    use: "The public Ghana updates RSS, requested on the same path as the other feeds. The Bulletins page lists the items. The Situation page keeps the items whose category is Situation Report, with the publisher and date from the feed. If that host does not return the RSS to the site client, the same public address is requested again.",
     limit: "A ReliefWeb report is not a Ghana Meteorological Agency warning. A number inside a report is not copied into a count on this site.",
   },
   {

@@ -1,9 +1,11 @@
 import { UpstreamError } from "@/lib/errors";
-import { fetchHttpsText } from "@/lib/http";
+import { fetchText } from "@/lib/http";
 import { decodeEntities, httpsUrl, plainText } from "@/lib/text";
 
 export const RELIEFWEB_RSS = "https://reliefweb.int/updates/rss.xml?legacy-river=country%2Fgha";
+export const RELIEFWEB_SEARCH = "https://reliefweb.int/updates/rss.xml?search[value]=primary_country.iso3:GHA";
 export const RELIEFWEB_GHANA = "https://reliefweb.int/country/gha";
+const BROWSER_CLIENT = "Mozilla/5.0 (compatible; GhanaDisaster/1.0; +https://ghanadisaster.com)";
 
 export type Bulletin = {
   title: string;
@@ -36,17 +38,27 @@ export function parseReliefWebRss(xml: string): Bulletin[] {
 export async function loadBulletins(): Promise<BulletinFeed> {
   const checkedAt = new Date().toISOString();
   if (cache && Date.now() - cache.at < 60_000) return { ok: true, checkedAt, items: cache.items };
-  try {
-    const response = await fetchHttpsText(RELIEFWEB_RSS, 15000);
-    if (response.status !== 200) return { ok: false, checkedAt, message: FAILURE };
-    const items = parseReliefWebRss(response.body);
-    if (!items.length) return { ok: false, checkedAt, message: FAILURE };
+  for (const url of [RELIEFWEB_RSS, RELIEFWEB_SEARCH]) {
+    const items = await readRss(url);
+    if (!items.length) continue;
     cache = { at: Date.now(), items };
     return { ok: true, checkedAt, items };
-  } catch (error) {
-    if (error instanceof UpstreamError) return { ok: false, checkedAt, message: FAILURE };
-    return { ok: false, checkedAt, message: FAILURE };
   }
+  return { ok: false, checkedAt, message: FAILURE };
+}
+
+async function readRss(url: string): Promise<Bulletin[]> {
+  for (const userAgent of [undefined, BROWSER_CLIENT]) {
+    try {
+      const response = await fetchText(url, 20_000, { userAgent, store: false });
+      if (response.status !== 200 || !response.body.includes("<rss")) continue;
+      const items = parseReliefWebRss(response.body);
+      if (items.length) return items;
+    } catch (error) {
+      if (!(error instanceof UpstreamError)) continue;
+    }
+  }
+  return [];
 }
 
 function bulletin(item: string): Bulletin | null {

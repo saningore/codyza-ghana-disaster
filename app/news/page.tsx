@@ -7,6 +7,7 @@ import { TIME_ZONE } from "@/lib/types";
 export const metadata: Metadata = { title: "Bulletins" };
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+export const maxDuration = 30;
 
 export default async function NewsPage() {
   const feed = await loadBulletins();
