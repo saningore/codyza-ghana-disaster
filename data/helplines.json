@@ -1,0 +1,35 @@
+[
+  {
+    "group": "Ministry of the Interior",
+    "sourceName": "Ministry of the Interior — agencies",
+    "sourceUrl": "https://www.mint.gov.gh/agencies/",
+    "lines": [
+      { "label": "Ghana Police Service, toll free", "number": "191" },
+      { "label": "Ghana Police Service, Vodafone and MTN toll free", "number": "18555" },
+      { "label": "Ghana National Fire Service, toll free", "number": "192" },
+      { "label": "Ghana National Fire Service", "number": "0299340383" },
+      { "label": "National Disaster Management Organisation", "number": "0299350030" },
+      { "label": "Emergency Response Centre, GIFEC", "number": "112" },
+      { "label": "Ambulance Service", "number": "193" }
+    ]
+  },
+  {
+    "group": "National Disaster Management Organisation",
+    "sourceName": "NADMO contacts",
+    "sourceUrl": "https://nadmo.gov.gh/index.php/contact",
+    "lines": [
+      { "label": "Emergency", "number": "112" },
+      { "label": "Emergency", "number": "0299 350 030" },
+      { "label": "Emergency", "number": "0299 350 244" },
+      { "label": "Emergency", "number": "0302 964 884" }
+    ]
+  },
+  {
+    "group": "National Ambulance Service",
+    "sourceName": "National Ambulance Service contact",
+    "sourceUrl": "https://www.nas.gov.gh/contact.php",
+    "lines": [
+      { "label": "Medical emergency, 24 hours", "number": "112" }
+    ]
+  }
+]
