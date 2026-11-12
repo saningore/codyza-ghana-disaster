@@ -7,7 +7,6 @@ import { TIME_ZONE } from "@/lib/types";
 export const metadata: Metadata = { title: "Situation" };
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-export const preferredRegion = "cpt1";
 export const maxDuration = 30;
 
 export default async function SituationPage() {
